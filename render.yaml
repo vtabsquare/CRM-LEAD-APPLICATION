@@ -79,15 +79,11 @@ services:
   # Frontend Service (React)
   - type: web
     name: crm-frontend
-    env: node
-    plan: free
+    env: static
     buildCommand: "cd frontend && npm install && npm run build"
-    startCommand: "cd frontend && npm run preview"
-    healthCheckPath: "/"
+    staticPublishPath: "frontend/dist"
     envVars:
-      - key: NODE_VERSION
-        value: 18
-      - key: VITE_API_URL
+      - key: VITE_API_BASE_URL
         value: https://crm-backend.onrender.com
 
 # WhatsApp Service (Optional - separate service)
