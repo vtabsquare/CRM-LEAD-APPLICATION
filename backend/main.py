@@ -18,6 +18,7 @@ from openpyxl.utils import range_boundaries
 import gspread
 from google.oauth2.service_account import Credentials
 import os # Trigger Reload Fix
+import time
 from datetime import datetime
 import re
 import uuid
@@ -201,7 +202,18 @@ else:
 
 
 # Configuration  
-EXCEL_FILE_PATH = os.getenv("EXCEL_FILE_PATH", "Lead CRM ApplicationData.xlsx")
+EXCEL_FILE_PATH = os.getenv("EXCEL_FILE_PATH", "CRM_Lead_Template (1).xlsm")
+if not os.path.exists(EXCEL_FILE_PATH):
+    for candidate in [
+        "CRM_Lead_Template (1).xlsm",
+        os.path.join("backend", "CRM_Lead_Template (1).xlsm"),
+        os.path.join(os.path.dirname(__file__), "CRM_Lead_Template (1).xlsm"),
+        "Lead CRM ApplicationData.xlsx",
+        os.path.join(os.path.dirname(__file__), "Lead CRM ApplicationData.xlsx"),
+    ]:
+        if os.path.exists(candidate):
+            EXCEL_FILE_PATH = candidate
+            break
 EXCEL_SHEET_NAME = "Lead CRM"  # Sheet name to use from the Excel file
 ENQUIRY_SHEET_NAME = "Enquiry"
 ADMISSION_SHEET_NAME = "Patient Admission"
@@ -212,6 +224,15 @@ LIST_BOX_SHEET = "List box"  # Sheet containing dropdown options (legacy)
 DROPDOWN_OPTION_SHEET = "DropdownOption"  # New centralized dropdown management sheet
 GOOGLE_SHEET_NAME = "Sheet1"  # Keep as default variable but irrelevant for data storage now
 CREDENTIALS_FILE = os.getenv("CREDENTIALS_FILE", "google_credentials.json")
+if not os.path.exists(CREDENTIALS_FILE):
+    for candidate in [
+        "google_credentials.json",
+        os.path.join("backend", "google_credentials.json"),
+        os.path.join(os.path.dirname(__file__), "google_credentials.json"),
+    ]:
+        if os.path.exists(candidate):
+            CREDENTIALS_FILE = candidate
+            break
 CSV_FILE_PATH = "CRM Leads - Sheet1.csv"
 FIELD_SCHEMA_FILE = "field_schema.json"
 ADMISSION_SCHEMA_FILE = "admission_schema.json"
@@ -1328,6 +1349,11 @@ def upsert_to_sheet(sheet_name: str, data: Dict[str, Any], schema_type: str = "e
         action = "appended"
         val_opt = 'RAW' if strict_mode else 'USER_ENTERED'
         sheet.append_row(final_row, value_input_option=val_opt)
+
+    try:
+        invalidate_sheet1_search_cache()
+    except Exception:
+        pass
 
     return {
         "status": "success",
@@ -3853,8 +3879,23 @@ def ensure_google_sheet(client: gspread.Client) -> gspread.Spreadsheet:
         return client.create(GOOGLE_SHEET_NAME)
 
 
+_main_client_cache: Optional[gspread.Client] = None
+_main_spreadsheet_cache: Optional[gspread.Spreadsheet] = None
+_main_client_cache_time: float = 0
+MAIN_CLIENT_CACHE_TTL: int = 300  # 5 minutes
+
 def get_google_sheet_client():
-    """Helper to get authenticated gspread client and spreadsheet."""
+    """Helper to get authenticated gspread client and spreadsheet with client reuse."""
+    global _main_client_cache, _main_spreadsheet_cache, _main_client_cache_time
+    import time
+    now = time.time()
+    if (
+        _main_client_cache is not None
+        and _main_spreadsheet_cache is not None
+        and (now - _main_client_cache_time) < MAIN_CLIENT_CACHE_TTL
+    ):
+        return _main_client_cache, _main_spreadsheet_cache
+
     if not os.path.exists(CREDENTIALS_FILE):
         raise HTTPException(status_code=404, detail="Google credentials file not found")
     
@@ -3865,6 +3906,10 @@ def get_google_sheet_client():
     creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=scope)
     client = gspread.authorize(creds)
     spreadsheet = ensure_google_sheet(client)
+    
+    _main_client_cache = client
+    _main_spreadsheet_cache = spreadsheet
+    _main_client_cache_time = now
     return client, spreadsheet
 
 
@@ -4383,18 +4428,37 @@ def ensure_bed_sheets_google(spreadsheet: gspread.Spreadsheet):
         ws_feedback = spreadsheet.add_worksheet(title=FEEDBACK_SHEET_NAME, rows=100, cols=10)
         ws_feedback.append_row(["Date", "Patient Name", "Comfort", "Cleanliness", "Staff", "Comments"])
 
+_bed_sheets_ensured = False
+_beds_cache = {"data": None, "timestamp": 0}
+BEDS_CACHE_TTL = 60  # seconds
+
+def invalidate_beds_cache():
+    global _beds_cache
+    _beds_cache["data"] = None
+    _beds_cache["timestamp"] = 0
 
 @app.get("/api/beds")
 async def get_beds():
     """Get all bed status from Google Sheets."""
+    import time
+    global _bed_sheets_ensured, _beds_cache
+    now = time.time()
+    if _beds_cache["data"] is not None and (now - _beds_cache["timestamp"]) < BEDS_CACHE_TTL:
+        return _beds_cache["data"]
+
     try:
         client, spreadsheet = get_google_sheet_client()
-        ensure_bed_sheets_google(spreadsheet)
+        if not _bed_sheets_ensured:
+            ensure_bed_sheets_google(spreadsheet)
+            _bed_sheets_ensured = True
         ws = spreadsheet.worksheet(ADMISSION_SHEET_NAME)
         
         rows = ws.get_all_values()
         if len(rows) < 2:
-            return {"beds": []}
+            res = {"beds": []}
+            _beds_cache["data"] = res
+            _beds_cache["timestamp"] = now
+            return res
             
         headers = [str(h).strip().lower() for h in rows[0]]
         beds = []
@@ -4423,7 +4487,10 @@ async def get_beds():
             if clean_bed["room_no"]:
                 beds.append(clean_bed)
                 
-        return {"beds": beds}
+        res = {"beds": beds}
+        _beds_cache["data"] = res
+        _beds_cache["timestamp"] = now
+        return res
     except Exception as e:
         print(f"Error fetching beds: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -4546,6 +4613,7 @@ async def allocate_bed(payload: BedAllocationRequest):
             except Exception as e:
                 print(f"[Bed Allocation] Failed to send room allocation email: {e}")
         
+        invalidate_beds_cache()
         return {"status": "success", "message": "Bed allocated successfully"}
         
     except HTTPException:
@@ -4696,6 +4764,7 @@ async def discharge_bed(room_no: str, bed_index: int):
         
         ws.batch_update(updates)
         
+        invalidate_beds_cache()
         return {"status": "success", "message": "Patient discharged successfully"}
         
     except HTTPException:
@@ -4748,6 +4817,7 @@ async def update_discharge_date(room_no: str, bed_index: int, discharge_date: st
         # ONLY update discharge date - do NOT change status or clear patient data
         ws.update_cell(target_row_num, dis_idx + 1, discharge_date or "")
         
+        invalidate_beds_cache()
         return {"status": "success", "message": "Discharge date updated successfully"}
         
     except HTTPException:
@@ -4844,17 +4914,27 @@ Otherwise, provide both name and ID, including location and phone if helpful."""
                 json=payload
             )
             
+            # If configured model is unavailable/deprecated on Groq, fallback to active qwen/qwen3.8-27b model
+            if response.status_code == 404 and payload.get("model") != "qwen/qwen3.8-27b":
+                print(f"[Groq AI WARN] Model '{payload.get('model')}' not found on account, falling back to 'qwen/qwen3.8-27b'...")
+                payload["model"] = "qwen/qwen3.8-27b"
+                response = await client.post(
+                    f"{GROQ_API_BASE_URL}/chat/completions",
+                    headers=headers,
+                    json=payload
+                )
+
             if response.status_code == 200:
                 result = response.json()
                 ai_response = result.get('choices', [{}])[0].get('message', {}).get('content', '')
                 if ai_response:
-                    print(f"✅ Groq AI Response received: {ai_response[:100]}...")
+                    print(f"[Groq AI] Response received successfully")
                     return ai_response.strip()
                 else:
-                    print("⚠️ Groq returned empty response")
+                    print("[Groq AI WARN] Groq returned empty response")
                     return None
             else:
-                print(f"❌ Groq API error: {response.status_code} - {response.text}")
+                print(f"[Groq AI ERROR] {response.status_code} - {response.text}")
                 return None
                 
     except Exception as e:
@@ -5951,24 +6031,31 @@ Grand World Healthcare System
         raise HTTPException(status_code=500, detail=f"Failed to send test email: {str(e)}")
 
 
+_sheet1_search_cache = {"values": None, "timestamp": 0}
+SHEET1_SEARCH_CACHE_TTL = 30  # seconds
+
+def invalidate_sheet1_search_cache():
+    global _sheet1_search_cache
+    _sheet1_search_cache["values"] = None
+    _sheet1_search_cache["timestamp"] = 0
+
+
 @app.get("/search_data")
 async def search_data(query: Optional[str] = Query(None, min_length=2), limit: int = 50):
     """Search for patient data for auto-fill. If query is empty, returns all data up to limit."""
+    global _sheet1_search_cache
+    now = time.time()
     try:
-        # Use gspread directly to get raw data
-        if not os.path.exists(CREDENTIALS_FILE):
-             # Try to start without creds (maybe public?) No, strict requirement here.
-             raise HTTPException(status_code=404, detail="Google credentials file not found")
-
-        scope = [
-            'https://spreadsheets.google.com/feeds',
-            'https://www.googleapis.com/auth/drive'
-        ]
-        creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=scope)
-        client = gspread.authorize(creds)
-        spreadsheet = ensure_google_sheet(client)
-        sheet = spreadsheet.sheet1
-        values = sheet.get_all_values()
+        if _sheet1_search_cache["values"] is not None and (now - _sheet1_search_cache["timestamp"]) < SHEET1_SEARCH_CACHE_TTL:
+            values = _sheet1_search_cache["values"]
+        else:
+            if not os.path.exists(CREDENTIALS_FILE):
+                raise HTTPException(status_code=404, detail="Google credentials file not found")
+            client, spreadsheet = get_google_sheet_client()
+            sheet = spreadsheet.sheet1
+            values = sheet.get_all_values()
+            _sheet1_search_cache["values"] = values
+            _sheet1_search_cache["timestamp"] = now
 
         if not values:
             return {"results": [], "headers": [], "rows": []}

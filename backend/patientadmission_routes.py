@@ -606,8 +606,8 @@ async def get_billing_preview(days: int = Query(default=30, ge=1, le=90)):
                     # Calculate total amount: (Expected Revenue + Additional Nursing) - Discount
                     amount = (patient_admission_revenue + additional_nursing) - discount
                     
-                    print(f"[Billing Preview DEBUG] {patient_name} - Revenue: ₹{patient_admission_revenue}, Nursing: ₹{additional_nursing}, Discount: ₹{discount}, Total: ₹{amount}")
-                    print(f"[Billing Preview DEBUG] {patient_name} - INCLUDED! Amount: ₹{amount}")
+                    print(f"[Billing Preview DEBUG] {patient_name} - Revenue: Rs.{patient_admission_revenue}, Nursing: Rs.{additional_nursing}, Discount: Rs.{discount}, Total: Rs.{amount}")
+                    print(f"[Billing Preview DEBUG] {patient_name} - INCLUDED! Amount: Rs.{amount}")
                     
                     days_until = (next_billing_date - today).days
                     
@@ -631,7 +631,7 @@ async def get_billing_preview(days: int = Query(default=30, ge=1, le=90)):
         # Sort by billing date
         upcoming_bills.sort(key=lambda x: x["days_until"])
         
-        print(f"[Billing Preview] Found {len(upcoming_bills)} upcoming bills, total forecast: ₹{total_forecast}")
+        print(f"[Billing Preview] Found {len(upcoming_bills)} upcoming bills, total forecast: Rs.{total_forecast}")
         
         return {
             "status": "success",

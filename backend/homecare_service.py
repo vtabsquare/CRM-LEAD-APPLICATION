@@ -18,13 +18,24 @@ load_dotenv()
 
 # Configuration
 CREDENTIALS_FILE = os.getenv("CREDENTIALS_FILE", "google_credentials.json")
+if not os.path.exists(CREDENTIALS_FILE):
+    for candidate in [
+        "google_credentials.json",
+        os.path.join("backend", "google_credentials.json"),
+        os.path.join(os.path.dirname(__file__), "google_credentials.json"),
+    ]:
+        if os.path.exists(candidate):
+            CREDENTIALS_FILE = candidate
+            break
 HOMECARE_SHEET_ID = os.getenv("HOMECARE_SHEET_ID")
 CRM_ADMISSION_SHEET_ID = os.getenv("PATIENT_ADMISSION_SHEET_ID")
 ADMISSION_CREDENTIALS_FILE = "CRM-admission.json"
 
 
-def get_google_sheet_client(credentials_file: str = CREDENTIALS_FILE):
+def get_google_sheet_client(credentials_file: str = None):
     """Get authenticated gspread client"""
+    if credentials_file is None:
+        credentials_file = CREDENTIALS_FILE
     if not os.path.exists(credentials_file):
         raise HTTPException(status_code=404, detail=f"Credentials file not found: {credentials_file}")
     

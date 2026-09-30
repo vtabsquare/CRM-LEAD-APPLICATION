@@ -30,12 +30,13 @@ dist-ssr/
 .DS_Store
 Thumbs.db
 
-# Sensitive files
+# Sensitive files — NEVER commit credentials or secrets
 google_credentials.json
+CRM-admission.json
 *.xlsm
 *.xlsx
 
-# Environment
+# Environment files — keep secrets out of version control
 .env
 .env.local
 .env.production
@@ -53,11 +54,12 @@ backend/tmp/
 backend/*.pickle
 backend/gmail_token.pickle
 backend/gmail_oauth_credentials.json
+
+# Sheet ID files (contain production IDs)
 backend/google_sheet_id.txt
 backend/patient_admission_sheet_id.txt
-backend/crm-admission.json
 
-# Credential and sensitive data files
+# Sensitive credential / data files
 LOGIN_CREDENTIALS.md
 backend/all_login_users.txt
 backend/login_check_results.txt
@@ -69,10 +71,9 @@ backend/billing_diagnostic_output.txt
 backend/error.txt
 backend/sheet_tabs.txt
 
-# Temporary scripts (should not be in production)
+# Temporary / scratch scripts
 scratch_categorize.py
 generate_report.py
 revised_report.md
 migrate_frontend.py
 scratch_analysis.json
-

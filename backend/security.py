@@ -18,6 +18,10 @@ from fastapi import Request, HTTPException, status
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from dotenv import load_dotenv
+load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
+
 # --- Configuration ---
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", secrets.token_hex(32))
 JWT_ALGORITHM = "HS256"
