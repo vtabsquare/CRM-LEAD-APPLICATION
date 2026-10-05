@@ -256,6 +256,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
 
+        # Do not override CORS preflight responses — let CORSMiddleware handle them cleanly
+        if request.method == "OPTIONS":
+            return response
+
         # Prevent MIME type sniffing
         response.headers["X-Content-Type-Options"] = "nosniff"
 
@@ -284,7 +288,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: blob:; "
-            "connect-src 'self' " + " ".join(ALLOWED_ORIGINS) + " https://*.googleapis.com; "
+            "connect-src 'self' " + " ".join(ALLOWED_ORIGINS) + " https://*.googleapis.com https://*.onrender.com; "
             "frame-src 'self' https://app.powerbi.com; "
             "frame-ancestors 'none';"
         )

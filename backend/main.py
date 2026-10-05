@@ -147,6 +147,9 @@ def save_settings(settings: Settings):
     with open(SETTINGS_FILE, "w") as f:
         json.dump(settings.dict(), f, indent=2)
 
+# Middleware execution order in FastAPI is REVERSE of add order.
+# We want: CORS -> SecurityHeaders -> RateLimit -> Auth
+# So we add them in reverse: Auth first, then RateLimit, SecurityHeaders, CORS last.
 app.add_middleware(AuthenticationMiddleware)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
@@ -154,8 +157,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "Accept"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With"],
+    expose_headers=["Content-Range", "X-Total-Count"],
 )
 
 # Include invoice router
