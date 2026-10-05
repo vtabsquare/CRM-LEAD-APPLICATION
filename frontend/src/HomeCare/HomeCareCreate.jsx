@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, AlertCircle } from 'lucide-react';
-import API_BASE_URL from '../config';
+import api from '../api';
 
 const HomeCareCreate = () => {
     const navigate = useNavigate();
@@ -51,15 +51,9 @@ const HomeCareCreate = () => {
         try {
             setLoading(true);
 
-            const response = await fetch(`${API_BASE_URL}/api/homecare/clients`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(formData),
-            });
-
-            const data = await response.json();
+            // Use centralized API client which automatically attaches JWT token
+            const response = await api.post('/api/homecare/clients', formData);
+            const data = response.data;
 
             if (data.status === 'success') {
                 setSuccess('Home care client added successfully!');
@@ -71,11 +65,17 @@ const HomeCareCreate = () => {
             }
         } catch (err) {
             console.error('Error adding client:', err);
-            setError('Failed to add client. Please try again.');
+            // Check if it's an Axios error with a response from the backend
+            if (err.response && err.response.data && err.response.data.detail) {
+                setError(err.response.data.detail);
+            } else {
+                setError('Failed to add client. Please try again.');
+            }
         } finally {
             setLoading(false);
         }
     };
+
 
     return (
         <div className="p-6">

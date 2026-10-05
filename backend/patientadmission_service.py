@@ -730,8 +730,8 @@ def create_patientadmission_client(client_data: Dict[str, Any]) -> Dict[str, Any
         }
         
     except Exception as e:
-        print(f"[Patient Admission] Error creating client: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create client: {str(e)}")
+        print(f"[Patient Admission] Error creating client: {repr(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create client: {repr(e)}")
 
 
 def update_patientadmission_client(patient_name: str, client_data: Dict[str, Any]) -> Dict[str, Any]:

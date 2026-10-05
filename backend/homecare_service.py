@@ -720,8 +720,8 @@ def create_homecare_client(client_data: Dict[str, Any]) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f"[Home Care] Error creating client: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create client: {str(e)}")
+        print(f"[Home Care] Error creating client: {repr(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create client: {repr(e)}")
 
 
 def update_homecare_client(patient_name: str, client_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -822,6 +822,6 @@ def update_homecare_client(patient_name: str, client_data: Dict[str, Any]) -> Di
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[Home Care] Error updating client: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update client: {str(e)}")
+        print(f"[Home Care] Error updating client: {repr(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update client: {repr(e)}")
 
