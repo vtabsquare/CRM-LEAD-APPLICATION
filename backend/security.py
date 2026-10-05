@@ -31,10 +31,13 @@ ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv(
         "ALLOWED_ORIGINS",
-        "http://localhost:3000,http://localhost:5173,http://localhost:5174"
+        "http://localhost:3000,http://localhost:5173,http://localhost:5174,https://crm-lead-application-5apw.onrender.com"
     ).split(",")
     if origin.strip()
 ]
+# Ensure production frontend URL is always allowed
+if "https://crm-lead-application-5apw.onrender.com" not in ALLOWED_ORIGINS:
+    ALLOWED_ORIGINS.append("https://crm-lead-application-5apw.onrender.com")
 
 
 def _get_cors_headers(request: Request) -> dict:
