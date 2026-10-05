@@ -45,6 +45,7 @@ import PatientAdmissionEdit from './PatientAdmission/PatientAdmissionEdit';
 
 // Import API configuration
 import API_BASE_URL from './config';
+import { warmUpBackend } from './api';
 
 const LOGIN_STATS = [
   { label: 'Monthly Admissions Processed', value: '1.2K+' },
@@ -72,17 +73,10 @@ function App() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const location = useLocation();
 
-  // Save authentication state to localStorage whenever it changes
+  // Warm up the backend immediately on app load (handles Render free-tier cold starts)
   useEffect(() => {
-    localStorage.setItem('isAuthenticated', isAuthenticated.toString());
-  }, [isAuthenticated]);
-
-  // Save username to localStorage whenever it changes
-  useEffect(() => {
-    if (loginUser) {
-      localStorage.setItem('loginUser', loginUser);
-    }
-  }, [loginUser]);
+    warmUpBackend();
+  }, []);
 
   // Save authentication state to localStorage whenever it changes
   useEffect(() => {
